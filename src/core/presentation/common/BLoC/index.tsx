@@ -1,3 +1,5 @@
+import {BatchUpdate} from "./BatchUpdate";
+
 type Subscription<State> = (state: State) => void;
 type StateChanger<State> = (state: State) => State;
 
@@ -8,9 +10,11 @@ type StateChanger<State> = (state: State) => State;
  *  чтобы уведомить представление об изменениях
  */
 export class BLoC<State> {
+  private batchUpdate = new BatchUpdate()
   private listeners: Subscription<State>[] = [];
 
-  constructor(private internalState: State) {}
+  constructor(private internalState: State) {
+  }
 
   public get state(): State {
     return this.internalState;
@@ -18,14 +22,11 @@ export class BLoC<State> {
 
   /**
    * @description функция изменения состояния,
-   * перетирает старое состояние новым, и уведомляет слушателей об изменениях
+   * перетирает старое состояние новым, планирует обновление состояния
    */
   changeState(changeState: StateChanger<State>) {
     this.internalState = changeState(this.internalState);
-
-    if (this.listeners.length > 0) {
-      this.listeners.forEach((listener) => listener(this.state));
-    }
+    this.batchUpdate.scheduleUpdate(this.notify)
   }
 
   subscribe(listener: Subscription<State>) {
@@ -34,8 +35,16 @@ export class BLoC<State> {
 
   unsubscribe(listener: Subscription<State>) {
     const index = this.listeners.indexOf(listener);
-    if (index > -1) {
-      this.listeners.splice(index, 1);
-    }
+    if (index === -1) return;
+
+    this.listeners.splice(index, 1);
+  }
+
+  /**
+   * @description уведомляет слушателей об изменениях
+   */
+  notify = () => {
+    if (this.listeners.length === 0) return;
+    this.listeners.forEach((listener) => listener(this.state));
   }
 }
